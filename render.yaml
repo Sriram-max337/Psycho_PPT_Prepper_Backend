@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: ppt-rebuilder-backend
+    runtime: python
+    plan: free # Use the free tier for your MVP
+    region: ohio # Choose the region closest to your users
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: PORT
+        value: 10000
+      - key: GEMINI_API_KEY # If you decide to call Gemini from the backend instead
+        sync: false # You'll set this manually in the Render Dashboard for security
