@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
 from pptx import Presentation
 from io import BytesIO
 import json
@@ -15,16 +16,35 @@ async def rebuild_ppt(file: UploadFile = File(...), content: str = Form(...)):
         if i < len(new_data):
             slide_update = new_data[i]
             for shape in slide.shapes:
-                if not shape.has_text_frame: continue
+                if not shape.has_text_frame: 
+                    continue
                 
-                # Surgical replacement in the first run to keep formatting
-                if shape == slide.shapes.title:
-                    shape.text_frame.paragraphs[0].runs[0].text = slide_update['new_title']
-                else:
-                    combined_text = "\n".join(slide_update['new_content'])
-                    shape.text_frame.paragraphs[0].runs[0].text = combined_text
+                tf = shape.text_frame
+                # Target only the first paragraph and first run to preserve 'SLM' design
+                if tf.paragraphs:
+                    p = tf.paragraphs[0]
+                    
+                    if shape == slide.shapes.title:
+                        new_text = slide_update.get('new_title', '')
+                    else:
+                        new_text = "\n".join(slide_update.get('new_content', []))
 
-    # Save to a buffer and return to Lovable
+                    # SURGICAL SWAP: Replace text in the first run to keep formatting
+                    if p.runs:
+                        p.runs[0].text = new_text
+                        # Remove any extra runs that might contain leftover original text
+                        for extra_run in p.runs[1:]:
+                            p._p.remove(extra_run._r) 
+                    else:
+                        # Fallback if the template shape was empty
+                        p.text = new_text
+
     output = BytesIO()
     prs.save(output)
-    return StreamingResponse(BytesIO(output.getvalue()), media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+    output.seek(0)
+    
+    return StreamingResponse(
+        output, 
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={"Content-Disposition": "attachment; filename=Rebuilt_Presentation.pptx"}
+    )
