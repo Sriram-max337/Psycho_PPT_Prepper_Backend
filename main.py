@@ -20,24 +20,27 @@ async def rebuild_ppt(file: UploadFile = File(...), content: str = Form(...)):
                     continue
                 
                 tf = shape.text_frame
-                # Target only the first paragraph and first run to preserve 'SLM' design
-                if tf.paragraphs:
-                    p = tf.paragraphs[0]
-                    
-                    if shape == slide.shapes.title:
-                        new_text = slide_update.get('new_title', '')
-                    else:
-                        new_text = "\n".join(slide_update.get('new_content', []))
+                # Ensure we have at least one paragraph to work with
+                if not tf.paragraphs:
+                    continue
+                
+                p = tf.paragraphs[0]
+                
+                # Determine the text to inject based on the shape type
+                if shape == slide.shapes.title:
+                    new_text = slide_update.get('new_title', '')
+                else:
+                    new_text = "\n".join(slide_update.get('new_content', []))
 
-                    # SURGICAL SWAP: Replace text in the first run to keep formatting
-                    if p.runs:
-                        p.runs[0].text = new_text
-                        # Remove any extra runs that might contain leftover original text
-                        for extra_run in p.runs[1:]:
-                            p._p.remove(extra_run._r) 
-                    else:
-                        # Fallback if the template shape was empty
-                        p.text = new_text
+                # SURGICAL UPDATE: Use the first run to keep formatting
+                if p.runs:
+                    p.runs[0].text = new_text
+                    # IMPORTANT: Clear all other runs to prevent duplicate/old text
+                    for r_idx in range(1, len(p.runs)):
+                        p.runs[r_idx].text = ""
+                else:
+                    # Fallback: if the shape was empty, add a run (will use default style)
+                    p.add_run().text = new_text
 
     output = BytesIO()
     prs.save(output)
